@@ -62,7 +62,12 @@ type target struct {
 
 func (t *target) FindSubmatch(reg string) string {
 	re := regexp.MustCompile(reg)
-	return string(re.FindSubmatch(t.data)[1])
+	result := re.FindStringSubmatch(string(t.data))
+	if len(result) < 2 {
+		log.Print(string(t.data))
+		panic(fmt.Sprintf("func:target.FindSubmatch target %s not found on site %s!", reg, t.Url))
+	}
+	return string(result[1])
 }
 
 func (t *target) GetBody() {
@@ -70,6 +75,10 @@ func (t *target) GetBody() {
 	check("func:target.GetBody http:Get ", err)
 	defer resp.Body.Close()
 	t.data, err = ioutil.ReadAll(resp.Body)
+	re := regexp.MustCompile(`<meta.*charset\s*=\s*"?[Uu][Tt][Ff]-8"`)
+	if charset := re.FindStringSubmatch(string(t.data)); len(charset) == 0 {
+		panic("func:target.GetBody encoding not UTF-8 on page " + t.Url)
+	}
 	check("func:target.GetBody ioutil.ReadAll ", err)
 }
 
@@ -104,13 +113,15 @@ func (s *source) CreateRegexp(url, name, value string) {
 	s.Regulars[url] = &reg
 }
 
-func (s *source) GetRegexp(t *target) *regular {
+func (s *source) GetRegexp(t *target) (string, string) {
 	re, _ := regexp.Compile(`http.://([^/]+)/`)
-	url := re.FindStringSubmatch(t.Url)[1]
-	if reg, ok := s.Regulars[url]; ok {
-		return reg
+	url := re.FindStringSubmatch(t.Url)
+	if len(url) > 1 {
+		if reg, ok := s.Regulars[url[1]]; ok {
+			return reg.Name, reg.Value
+		}
 	}
-	return nil
+	return "", ""
 }
 
 func (s *source) DeleteRegexp(url string) {
@@ -131,8 +142,12 @@ func WorkerHandle(number int, e chan *target) {
 	for elem := range e {
 		log.Printf("Start worker %d work with %s...", number, elem.Url)
 		elem.GetBody()
-		name := elem.FindSubmatch(database.GetRegexp(elem).Name)
-		value := elem.FindSubmatch(database.GetRegexp(elem).Value)
+		Rname, Rvalue := database.GetRegexp(elem)
+		if Rname == "" || Rvalue == "" {
+			log.Panicf("Regexp for %s not found!\n", elem.Url)
+		}
+		name := elem.FindSubmatch(Rname)
+		value := elem.FindSubmatch(Rvalue)
 		if value != elem.Cur {
 			fmt.Printf("%s:%s\t| %s\t%s\n", elem.Cur, value, name, elem.Url)
 		} else {
