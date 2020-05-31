@@ -144,7 +144,7 @@ func WorkerHandle(number int, e chan *target) {
 		elem.GetBody()
 		Rname, Rvalue := database.GetRegexp(elem)
 		if Rname == "" || Rvalue == "" {
-			log.Panicf("Regexp for %s not found!\n", elem.Url)
+			panic(fmt.Sprintf("Regexp for %s not found!\n", elem.Url))
 		}
 		name := elem.FindSubmatch(Rname)
 		value := elem.FindSubmatch(Rvalue)
