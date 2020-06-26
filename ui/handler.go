@@ -9,13 +9,14 @@ import (
 // Change select view
 func nextView(g *gocui.Gui, v *gocui.View) error {
 	if g.CurrentView() == nil {
-		if _, err := g.SetCurrentView("URL"); err != nil {
+		if _, err := g.SetCurrentView(layouts[0].Title); err != nil {
 			return err
 		}
 		return nil
 	}
 	oldView := g.CurrentView().Name()
-	views := g.Views()
+	//views := g.Views()
+	views := layouts
 	for indView, view := range views {
 		if g.CurrentView().Name() == view.Name() {
 			if len(views)-1 == indView {
@@ -27,6 +28,9 @@ func nextView(g *gocui.Gui, v *gocui.View) error {
 			} else {
 				if _, err := g.SetCurrentView(views[indView+1].Name()); err != nil {
 					return err
+				}
+				if !views[indView+1].Selected {
+					nextView(g, v)
 				}
 				logger.Printf("Change select view %s to %s", oldView, g.CurrentView().Name())
 				return nil

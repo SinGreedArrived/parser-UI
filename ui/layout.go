@@ -13,12 +13,22 @@ type layout struct {
 	Title    string
 	Editable bool
 	Wrap     bool
+	Selected bool
 }
+
+func (l *layout) Name() string {
+	return l.ViewName
+}
+
+var (
+	layouts []*layout
+)
 
 func Layout(g *gocui.Gui) error {
 	maxX, maxY := g.Size()
 	maxX--
-	layouts := []*layout{
+	maxY--
+	layouts = []*layout{
 		{
 			ViewName: "URL",
 			x0:       0,
@@ -28,36 +38,40 @@ func Layout(g *gocui.Gui) error {
 			Title:    "URL - source for parsing",
 			Editable: true,
 			Wrap:     false,
+			Selected: true,
 		},
 		{
-			ViewName: "Rname",
+			ViewName: "Regular",
 			x0:       0,
 			y0:       3,
 			x1:       maxX,
 			y1:       5,
-			Title:    "Regexp - Name",
+			Title:    "Regexp",
 			Editable: true,
 			Wrap:     true,
-		},
-		{
-			ViewName: "Rtarget",
-			x0:       0,
-			y0:       6,
-			x1:       maxX,
-			y1:       8,
-			Title:    "Regexp - Target",
-			Editable: true,
-			Wrap:     true,
+			Selected: true,
 		},
 		{
 			ViewName: "MainView",
 			x0:       0,
-			y0:       9,
+			y0:       6,
 			x1:       maxX,
-			y1:       maxY - 1,
+			y1:       maxY - 3,
 			Title:    "Page Source",
 			Editable: false,
 			Wrap:     true,
+			Selected: true,
+		},
+		{
+			ViewName: "Status",
+			x0:       0,
+			y0:       maxY - 2,
+			x1:       maxX,
+			y1:       maxY,
+			Title:    "StatusBar",
+			Editable: false,
+			Wrap:     true,
+			Selected: false,
 		},
 	}
 	for _, view := range layouts {

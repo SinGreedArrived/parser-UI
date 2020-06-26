@@ -20,34 +20,35 @@ var (
 	httpClient = &http.Client{}
 	proxyFlag  = flag.String("proxy", "", "-proxy=\"127.0.0.1:9050\"")
 	filename   = flag.String("file", filepath.Dir(os.Args[0])+"/save.yaml", "-file=test.yaml") // Флаг для выбора файла с целями
-	//fileLog  = flag.String("log", "Stderr", "-log=parser.log")     // Флаг для логов
-	threads   = flag.Int("threads", 4, "-threads=6") // Указатель кол-во потоков
-	addRegexp = flag.Bool("addRegexp", false, `-addRegexp "SiteName" "RegexpForName" "RegexpForValue"`)
-	addTarget = flag.Bool("addTarget", false, `-addTarget "Url" "CurrentValue"`)
-	update    = flag.Bool("update", false, "-update") // Обновлять ли отслеживаемуе значения?
-	maximus   = flag.Bool("max", false, "-max")       // Использовать нитей столько, сколько целей в файле json
-	wg        sync.WaitGroup                          // Контроль
+	threads    = flag.Int("threads", 1, "-threads=6")                                          // Указатель кол-во потоков
+	addRegexp  = flag.Bool("addRegexp", false, `-addRegexp "SiteName" "RegexpForName" "RegexpForValue"`)
+	addTarget  = flag.Bool("addTarget", false, `-addTarget "Url" "CurrentValue"`)
+	update     = flag.Bool("update", false, "-update") // Обновлять ли отслеживаемуе значения?
+	maximus    = flag.Bool("max", false, "-max")       // Использовать нитей столько, сколько целей в файле json
+	wg         sync.WaitGroup                          // Контроль
+)
+
+const (
+	NameValue byte = 0
+	ValueName byte = 1
 )
 
 // -------------------------------------------------------------------------------
 // Хранилище регулярных выражений
 // -------------------------------------------------------------------------------
 type regular struct {
-	Name  string
-	Value string
+	regular *regexp.Regexp
+	mask    byte
 }
 
-func (r *regular) Create(name, value string) {
-	_, err := regexp.Compile(name)
+func (r *regular) Create(regular string, mask byte) error {
+	reg, err := regexp.Compile(regular)
 	if err != nil {
-		log.Panic(err)
+		return err
 	}
-	_, err = regexp.Compile(value)
-	if err != nil {
-		log.Panic(err)
-	}
-	r.Name = name
-	r.Value = value
+	r.regular = reg
+	r.mask = mask
+	return nil
 }
 
 // -------------------------------------------------------------------------------
@@ -107,9 +108,9 @@ func (s *source) Lenght() int {
 	return len(s.Data)
 }
 
-func (s *source) CreateRegexp(url, name, value string) {
+func (s *source) CreateRegexp(url, reg string, mask byte) {
 	var reg regular
-	reg.Create(name, value)
+	reg.Create(reg, mask)
 	s.Regulars[url] = &reg
 }
 
