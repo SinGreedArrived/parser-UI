@@ -20,32 +20,34 @@ var (
 	httpClient = &http.Client{}
 	proxyFlag  = flag.String("proxy", "", "-proxy=\"127.0.0.1:9050\"")
 	filename   = flag.String("file", filepath.Dir(os.Args[0])+"/save.yaml", "-file=test.yaml") // Флаг для выбора файла с целями
-	threads    = flag.Int("threads", 1, "-threads=6")                                          // Указатель кол-во потоков
-	addRegexp  = flag.Bool("addRegexp", false, `-addRegexp "SiteName" "RegexpForName" "RegexpForValue"`)
-	addTarget  = flag.Bool("addTarget", false, `-addTarget "Url" "CurrentValue"`)
-	update     = flag.Bool("update", false, "-update") // Обновлять ли отслеживаемуе значения?
-	maximus    = flag.Bool("max", false, "-max")       // Использовать нитей столько, сколько целей в файле json
-	wg         sync.WaitGroup                          // Контроль
+	//fileLog  = flag.String("log", "Stderr", "-log=parser.log")     // Флаг для логов
+	threads   = flag.Int("threads", 4, "-threads=6") // Указатель кол-во потоков
+	addRegexp = flag.Bool("addRegexp", false, `-addRegexp "SiteName" "RegexpForName" "RegexpForValue"`)
+	addTarget = flag.Bool("addTarget", false, `-addTarget "Url" "CurrentValue"`)
+	update    = flag.Bool("update", false, "-update") // Обновлять ли отслеживаемуе значения?
+	maximus   = flag.Bool("max", false, "-max")       // Использовать нитей столько, сколько целей в файле json
+	wg        sync.WaitGroup                          // Контроль
 )
 
 // -------------------------------------------------------------------------------
 // Хранилище регулярных выражений
 // -------------------------------------------------------------------------------
 type regular struct {
-	regular string
-	mask    string
+	Name  string
+	Value string
 }
 
-func CreateRegular(reg string, mask string) (*regular, error) {
-	r := new(regular)
-	_, err := regexp.Compile(reg)
+func (r *regular) Create(name, value string) {
+	_, err := regexp.Compile(name)
 	if err != nil {
-		return r, err
+		log.Panic(err)
 	}
-
-	r.regular = reg
-	r.mask = mask
-	return r, nil
+	_, err = regexp.Compile(value)
+	if err != nil {
+		log.Panic(err)
+	}
+	r.Name = name
+	r.Value = value
 }
 
 // -------------------------------------------------------------------------------
@@ -105,24 +107,21 @@ func (s *source) Lenght() int {
 	return len(s.Data)
 }
 
-func (s *source) CreateRegexp(url, regex, mask string) error {
-	reg, err := CreateRegular(regex, mask)
-	if err != nil {
-		return err
-	}
-	s.Regulars[url] = reg
-	return nil
+func (s *source) CreateRegexp(url, name, value string) {
+	var reg regular
+	reg.Create(name, value)
+	s.Regulars[url] = &reg
 }
 
-func (s *source) GetRegexp(t *target) *regular {
+func (s *source) GetRegexp(t *target) (string, string) {
 	re, _ := regexp.Compile(`http.://([^/]+)/`)
 	url := re.FindStringSubmatch(t.Url)
 	if len(url) > 1 {
 		if reg, ok := s.Regulars[url[1]]; ok {
-			return reg
+			return reg.Name, reg.Value
 		}
 	}
-	return nil
+	return "", ""
 }
 
 func (s *source) DeleteRegexp(url string) {
@@ -143,16 +142,19 @@ func WorkerHandle(number int, e chan *target) {
 	for elem := range e {
 		log.Printf("Start worker %d work with %s...", number, elem.Url)
 		elem.GetBody()
-		reg := database.GetRegexp(elem)
-		if reg != nil {
+		Rname, Rvalue := database.GetRegexp(elem)
+		if Rname == "" || Rvalue == "" {
 			panic(fmt.Sprintf("Regexp for %s not found!\n", elem.Url))
 		}
-		regul := regexp.MustCompile(reg.regular)
-		ValueName := regul.ReplaceAllString(string(elem.data), reg.mask)
-		fmt.Printf("%s:%s\t%s\n", elem.Cur, ValueName, elem.Url)
+		name := elem.FindSubmatch(Rname)
+		value := elem.FindSubmatch(Rvalue)
+		if value != elem.Cur {
+			fmt.Printf("%s:%s\t| %s\t%s\n", elem.Cur, value, name, elem.Url)
+		} else {
+			fmt.Printf("%s:%s\t| %s\n", elem.Cur, value, name)
+		}
 		if *update {
-			regul = regexp.MustCompile(`\d+`)
-			elem.UpdateCur(regul.FindString(ValueName))
+			elem.UpdateCur(value)
 		}
 		log.Printf("Worker %d done work with %s!", number, elem.Url)
 	}
@@ -228,11 +230,9 @@ func main() {
 		SaveData(&database)
 		log.Printf("Done save database.")
 	}()
-	database.CreateRegexp("mangabook.org", `<h1[^>]+>\s*([^<]+)\s*.*Добавлена\s+(\d+)`, "$2\t$1")
-	log.Println(database.Regulars)
 	if *addRegexp {
 		if len(flag.Args()) != 3 {
-			log.Panic(`Usage: parser -addRegexp "resource name" "Regexp" "Mask"`)
+			log.Panic(`Usage: parser -addRegexp "resource name" "RegexpForName" "RegexpForValue"`)
 		} else {
 			database.CreateRegexp(flag.Arg(0), flag.Arg(1), flag.Arg(2))
 		}
