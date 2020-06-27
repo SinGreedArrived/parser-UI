@@ -33,8 +33,8 @@ var (
 // Хранилище регулярных выражений
 // -------------------------------------------------------------------------------
 type regular struct {
-	exp  string
-	mask string
+	Exp  string
+	Mask string
 }
 
 func (r *regular) Create(reg, mask string) {
@@ -42,8 +42,8 @@ func (r *regular) Create(reg, mask string) {
 	if err != nil {
 		log.Panic(err)
 	}
-	r.exp = reg
-	r.mask = mask
+	r.Exp = reg
+	r.Mask = mask
 }
 
 // -------------------------------------------------------------------------------
@@ -71,7 +71,9 @@ func (t *target) GetBody() {
 	check("func:target.GetBody http:Get ", err)
 	defer resp.Body.Close()
 	t.data, err = ioutil.ReadAll(resp.Body)
-	re := regexp.MustCompile(`<meta.*charset\s*=\s*"?[Uu][Tt][Ff]-8"`)
+	re := regexp.MustCompile(`\n`)
+	t.data = re.ReplaceAll(t.data, []byte(""))
+	re = regexp.MustCompile(`<meta.*charset\s*=\s*"?[Uu][Tt][Ff]-8"`)
 	if charset := re.FindStringSubmatch(string(t.data)); len(charset) == 0 {
 		panic("func:target.GetBody encoding not UTF-8 on page " + t.Url)
 	}
@@ -142,8 +144,8 @@ func WorkerHandle(number int, e chan *target) {
 		if reg == nil {
 			panic(fmt.Sprintf("Regexp for %s not found!\n", elem.Url))
 		}
-		regex := regexp.MustCompile(reg.exp)
-		res := regex.ReplaceAllString(string(elem.data), reg.mask)
+		regex := regexp.MustCompile(reg.Exp)
+		res := regex.ReplaceAllString(string(elem.data), "$2\t$1")
 		regex = regexp.MustCompile(`\d+`)
 		value := regex.FindString(res)
 		fmt.Printf("%s:%s\t%s\n", elem.Cur, res, elem.Url)
@@ -224,7 +226,6 @@ func main() {
 		SaveData(&database)
 		log.Printf("Done save database.")
 	}()
-	database.CreateRegexp("mangabook.org", `.*<title>\s*(.*)\s*</title>.*Глав\s*манги:\s*(\d+)`, "$2\t$1")
 	if *addRegexp {
 		if len(flag.Args()) != 3 {
 			log.Panic(`Usage: parser -addRegexp "resource name" "RegexpForName" "RegexpForValue"`)
