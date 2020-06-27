@@ -47,6 +47,13 @@ func KeyBinding(gui *gocui.Gui) {
 			Description: "clear layout",
 		},
 		{
+			ViewName:    []string{"Regular"},
+			Handler:     useRegexp,
+			Key:         gocui.KeyEnter,
+			Modifier:    gocui.ModNone,
+			Description: "Use regexp to page",
+		},
+		{
 			ViewName:    []string{"URL"},
 			Handler:     DownloadPage,
 			Key:         gocui.KeyEnter,
