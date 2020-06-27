@@ -33,21 +33,17 @@ var (
 // Хранилище регулярных выражений
 // -------------------------------------------------------------------------------
 type regular struct {
-	Name  string
-	Value string
+	exp  string
+	mask string
 }
 
-func (r *regular) Create(name, value string) {
-	_, err := regexp.Compile(name)
+func (r *regular) Create(reg, mask string) {
+	_, err := regexp.Compile(reg)
 	if err != nil {
 		log.Panic(err)
 	}
-	_, err = regexp.Compile(value)
-	if err != nil {
-		log.Panic(err)
-	}
-	r.Name = name
-	r.Value = value
+	r.exp = reg
+	r.mask = mask
 }
 
 // -------------------------------------------------------------------------------
@@ -107,21 +103,21 @@ func (s *source) Lenght() int {
 	return len(s.Data)
 }
 
-func (s *source) CreateRegexp(url, name, value string) {
-	var reg regular
-	reg.Create(name, value)
-	s.Regulars[url] = &reg
+func (s *source) CreateRegexp(url, exp, mask string) {
+	reg := new(regular)
+	reg.Create(exp, mask)
+	s.Regulars[url] = reg
 }
 
-func (s *source) GetRegexp(t *target) (string, string) {
+func (s *source) GetRegexp(t *target) *regular {
 	re, _ := regexp.Compile(`http.://([^/]+)/`)
 	url := re.FindStringSubmatch(t.Url)
 	if len(url) > 1 {
 		if reg, ok := s.Regulars[url[1]]; ok {
-			return reg.Name, reg.Value
+			return reg
 		}
 	}
-	return "", ""
+	return nil
 }
 
 func (s *source) DeleteRegexp(url string) {
@@ -142,17 +138,15 @@ func WorkerHandle(number int, e chan *target) {
 	for elem := range e {
 		log.Printf("Start worker %d work with %s...", number, elem.Url)
 		elem.GetBody()
-		Rname, Rvalue := database.GetRegexp(elem)
-		if Rname == "" || Rvalue == "" {
+		reg := database.GetRegexp(elem)
+		if reg == nil {
 			panic(fmt.Sprintf("Regexp for %s not found!\n", elem.Url))
 		}
-		name := elem.FindSubmatch(Rname)
-		value := elem.FindSubmatch(Rvalue)
-		if value != elem.Cur {
-			fmt.Printf("%s:%s\t| %s\t%s\n", elem.Cur, value, name, elem.Url)
-		} else {
-			fmt.Printf("%s:%s\t| %s\n", elem.Cur, value, name)
-		}
+		regex := regexp.MustCompile(reg.exp)
+		res := regex.ReplaceAllString(string(elem.data), reg.mask)
+		regex = regexp.MustCompile(`\d+`)
+		value := regex.FindString(res)
+		fmt.Printf("%s:%s\t%s\n", elem.Cur, res, elem.Url)
 		if *update {
 			elem.UpdateCur(value)
 		}
@@ -230,6 +224,7 @@ func main() {
 		SaveData(&database)
 		log.Printf("Done save database.")
 	}()
+	database.CreateRegexp("mangabook.org", `.*<title>\s*(.*)\s*</title>.*Глав\s*манги:\s*(\d+)`, "$2\t$1")
 	if *addRegexp {
 		if len(flag.Args()) != 3 {
 			log.Panic(`Usage: parser -addRegexp "resource name" "RegexpForName" "RegexpForValue"`)
