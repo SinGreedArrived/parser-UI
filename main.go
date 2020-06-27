@@ -21,7 +21,7 @@ var (
 	proxyFlag  = flag.String("proxy", "", "-proxy=\"127.0.0.1:9050\"")
 	filename   = flag.String("file", filepath.Dir(os.Args[0])+"/save.yaml", "-file=test.yaml") // Флаг для выбора файла с целями
 	//fileLog  = flag.String("log", "Stderr", "-log=parser.log")     // Флаг для логов
-	threads   = flag.Int("threads", 4, "-threads=6") // Указатель кол-во потоков
+	threads   = flag.Int("threads", 1, "-threads=6") // Указатель кол-во потоков
 	addRegexp = flag.Bool("addRegexp", false, `-addRegexp "SiteName" "RegexpForName" "RegexpForValue"`)
 	addTarget = flag.Bool("addTarget", false, `-addTarget "Url" "CurrentValue"`)
 	update    = flag.Bool("update", false, "-update") // Обновлять ли отслеживаемуе значения?
