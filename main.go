@@ -145,7 +145,7 @@ func WorkerHandle(number int, e chan *target) {
 			panic(fmt.Sprintf("Regexp for %s not found!\n", elem.Url))
 		}
 		regex := regexp.MustCompile(reg.Exp)
-		res := regex.ReplaceAllString(string(elem.data), "$2\t$1")
+		res := regex.ReplaceAllString(string(elem.data), reg.Mask)
 		regex = regexp.MustCompile(`\d+`)
 		value := regex.FindString(res)
 		fmt.Printf("%s:%s\t%s\n", elem.Cur, res, elem.Url)
