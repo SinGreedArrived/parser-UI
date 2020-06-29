@@ -133,7 +133,7 @@ func (s *source) DeleteRegexp(url string) {
 func WorkerHandle(number int, e chan *target) {
 	defer func() {
 		if r := recover(); r != nil {
-			log.Printf("Recover! %s", r)
+			log.Printf("Worker %d crash...", number)
 			go WorkerHandle(number, e) // Что-то сломалось, но это не важно, ведь лог уже записан.
 		}
 	}()
@@ -148,7 +148,11 @@ func WorkerHandle(number int, e chan *target) {
 		res := regex.ReplaceAllString(string(elem.data), reg.Mask)
 		regex = regexp.MustCompile(`\d+`)
 		value := regex.FindString(res)
-		fmt.Printf("%s:%s\t%s\n", elem.Cur, res, elem.Url)
+		if elem.Cur != value {
+			fmt.Printf("%s:%s\t%s\n", elem.Cur, res, elem.Url)
+		} else {
+			fmt.Printf("%s:%s\n", elem.Cur, res)
+		}
 		if *update {
 			elem.UpdateCur(value)
 		}
