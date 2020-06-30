@@ -136,9 +136,9 @@ func (s *source) CreateRegexp(url, exp, mask string) error {
 	return nil
 }
 
-func (s *source) GetRegexp(t *target) *regular {
+func (s *source) GetRegexp(Url string) *regular {
 	re, _ := regexp.Compile(`http.://([^/]+)/`)
-	url := re.FindStringSubmatch(t.Url)
+	url := re.FindStringSubmatch(Url)
 	if len(url) > 1 {
 		if reg, ok := s.Regulars[url[1]]; ok {
 			return reg
@@ -177,7 +177,7 @@ func WorkerHandle(number int, e chan *target) {
 		if err != nil {
 			log.Panic(err)
 		}
-		reg := database.GetRegexp(elem)
+		reg := database.GetRegexp(elem.Url)
 		if reg == nil {
 			log.Panic(fmt.Sprintf("Regexp for %s not found!\n", elem.Url))
 		}
