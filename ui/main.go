@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -9,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"sync"
 
 	"golang.org/x/net/proxy"
@@ -37,13 +39,14 @@ type regular struct {
 	Mask string
 }
 
-func (r *regular) Create(reg, mask string) {
+func (r *regular) Create(reg, mask string) error {
 	_, err := regexp.Compile(reg)
 	if err != nil {
-		log.Panic(err)
+		return errors.New(fmt.Sprintf("func:Create regula.Create\n\t%s", err))
 	}
 	r.Exp = reg
 	r.Mask = mask
+	return nil
 }
 
 // -------------------------------------------------------------------------------
@@ -56,35 +59,45 @@ type target struct {
 	data []byte
 }
 
-func (t *target) GetData() []byte {
+func (t *target) GetData() ([]byte, error) {
 	if len(t.data) == 0 {
-		t.GetBody()
+		_, err := t.GetBody()
+		if err != nil {
+			return nil, err
+		}
 	}
-	return t.data
+	return t.data, nil
 }
 
-func (t *target) FindSubmatch(reg string) string {
+/*
+func (t *target) FindSubmatch(reg string) (string, error) {
 	re := regexp.MustCompile(reg)
 	result := re.FindStringSubmatch(string(t.data))
 	if len(result) < 2 {
 		log.Print(string(t.data))
-		panic(fmt.Sprintf("func:target.FindSubmatch target %s not found on site %s!", reg, t.Url))
+		return "", errors.New(fmt.Sprintf("func:target.FindSubmatch target %s not found on site %s!", reg, t.Url))
 	}
-	return string(result[1])
+	return string(result[1]), nil
 }
+*/
 
-func (t *target) GetBody() {
-	resp, err := httpClient.Get(t.Url)
-	check("func:target.GetBody http:Get ", err)
+func (t *target) GetBody() ([]byte, error) {
+	resp, err := httpClient.Get(strings.TrimSpace(t.Url))
+	if err != nil {
+		return nil, errors.New(fmt.Sprintf("func:target.GetBody http.Get\n\t%s", err))
+	}
 	defer resp.Body.Close()
 	t.data, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, errors.New(fmt.Sprintf("func:target.GetBody ioutil.ReadAll\n\t%s", err))
+	}
 	re := regexp.MustCompile(`\n`)
 	t.data = re.ReplaceAll(t.data, []byte(""))
 	re = regexp.MustCompile(`<meta.*charset\s*=\s*"?[Uu][Tt][Ff]-8"`)
 	if charset := re.FindStringSubmatch(string(t.data)); len(charset) == 0 {
-		panic("func:target.GetBody encoding not UTF-8 on page " + t.Url)
+		return nil, errors.New(fmt.Sprintf("func:target.GetBody encoding not UTF-8 on page %s", t.Url))
 	}
-	check("func:target.GetBody ioutil.ReadAll ", err)
+	return t.GetData()
 }
 
 func (t *target) UpdateCur(s string) {
@@ -104,18 +117,23 @@ func (s *source) Init() {
 	s.Regulars = make(map[string]*regular)
 }
 
-func (s *source) CreateTarget(Url, Cur string) {
+func (s *source) CreateTarget(Url, Cur string) *target {
 	s.Data = append(s.Data, &target{Url, Cur, nil})
+	return s.Data[len(s.Data)-1]
 }
 
 func (s *source) Lenght() int {
 	return len(s.Data)
 }
 
-func (s *source) CreateRegexp(url, exp, mask string) {
+func (s *source) CreateRegexp(url, exp, mask string) error {
 	reg := new(regular)
-	reg.Create(exp, mask)
+	err := reg.Create(exp, mask)
+	if err != nil {
+		return err
+	}
 	s.Regulars[url] = reg
+	return nil
 }
 
 func (s *source) GetRegexp(t *target) *regular {
@@ -133,6 +151,15 @@ func (s *source) DeleteRegexp(url string) {
 	delete(s.Regulars, url)
 }
 
+func (s *source) GetTarget(url string) *target {
+	for ind, _ := range s.Data {
+		if s.Data[ind].Url == url {
+			return s.Data[ind]
+		}
+	}
+	return nil
+}
+
 // -------------------------------------------------------------------------------
 // Функция для потоков
 // -------------------------------------------------------------------------------
@@ -146,10 +173,13 @@ func WorkerHandle(number int, e chan *target) {
 	}()
 	for elem := range e {
 		log.Printf("Start worker %d work with %s...", number, elem.Url)
-		elem.GetBody()
+		_, err := elem.GetBody()
+		if err != nil {
+			log.Panic(err)
+		}
 		reg := database.GetRegexp(elem)
 		if reg == nil {
-			panic(fmt.Sprintf("Regexp for %s not found!\n", elem.Url))
+			log.Panic(fmt.Sprintf("Regexp for %s not found!\n", elem.Url))
 		}
 		regex := regexp.MustCompile(reg.Exp)
 		res := regex.ReplaceAllString(string(elem.data), reg.Mask)
@@ -173,39 +203,41 @@ func WorkerHandle(number int, e chan *target) {
 // Main code
 // -------------------------------------------------------------------------------
 
-func check(msg string, err error) {
-	if err != nil {
-		log.Panic("PANIC: " + msg + err.Error())
-	}
-}
-
-func SaveData(s *source) {
+func SaveData(s *source) error {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf(r.(string))
 		}
 	}()
 	file, err := os.Create(*filename)
-	check("func:SaveData os.Create", err)
+	if err != nil {
+		return errors.New(fmt.Sprintf("func:SaveData os.Create\n\t%s", err))
+	}
 	defer file.Close()
 	yamlData, err := yaml.Marshal(s)
-	check("func:SaveData yaml.Marshal", err)
+	if err != nil {
+		return errors.New(fmt.Sprintf("func:SaveData yaml.Marshal\n\t%s", err))
+	}
 	file.Write(yamlData)
 	log.Printf("Save data to file: " + file.Name())
+	return nil
 }
 
-func LoadData(t *source) {
-	file, err := os.Open(*filename)
+func LoadData(t *source) error {
+	file, err := os.OpenFile(*filename, os.O_CREATE|os.O_RDONLY, 0755)
 	if err != nil {
-		log.Fatal(err.Error())
+		return errors.New(fmt.Sprintf("Can't open or create filename: %s", *filename))
 	}
 	defer file.Close()
 	yamlData, err := ioutil.ReadAll(file)
-	check("func:LoadData ioutil.ReadAll ", err)
+	if err != nil {
+		return errors.New(fmt.Sprintf("func:LoadData ioutil.ReadAll:\n\t%s", err))
+	}
 	err = yaml.Unmarshal(yamlData, t)
 	if err != nil {
-		log.Fatal(err.Error())
+		return errors.New(fmt.Sprintf("func:LoadData yaml.Unmarshal\n\t%s", err))
 	}
+	return nil
 }
 
 func ProxyInit(addr string) (err error) {
@@ -232,17 +264,25 @@ func main() {
 	}
 	database.Init()
 	log.Printf("Load database from %s", *filename)
-	LoadData(&database)
+	err := LoadData(&database)
+	if err != nil {
+		log.Fatal(err)
+	}
 	defer func() {
-		SaveData(&database)
+		err := SaveData(&database)
+		if err != nil {
+			log.Panic(err)
+		}
 		log.Printf("Done save database.")
 	}()
 	if *addRegexp {
-		if len(flag.Args()) != 3 {
-			log.Panic(`Usage: parser -addRegexp "resource name" "RegexpForName" "RegexpForValue"`)
-		} else {
-			database.CreateRegexp(flag.Arg(0), flag.Arg(1), flag.Arg(2))
-		}
+		Run()
+		/*		if len(flag.Args()) != 3 {
+					log.Panic(`Usage: parser -addRegexp "resource name" "RegexpForName" "RegexpForValue"`)
+				} else {
+					database.CreateRegexp(flag.Arg(0), flag.Arg(1), flag.Arg(2))
+				}
+		*/
 	}
 	if *addTarget {
 		if len(flag.Args()) != 2 {

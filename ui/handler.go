@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 
 	"github.com/jroimartin/gocui"
 )
@@ -48,13 +49,32 @@ func clearLayout(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
-func DownloadPage(g *gocui.Gui, v *gocui.View) error {
-	main, err := g.View("MainView")
+func StatusWrite(g *gocui.Gui, message string) error {
+	st, err := g.View("StatusBar")
 	if err != nil {
 		return err
 	}
-	main.Clear()
-	fmt.Fprint(main, PageBody)
+	fmt.Fprintf(st, message)
+	return nil
+}
+
+func DownloadPage(g *gocui.Gui, v *gocui.View) error {
+	Burl, _ := ioutil.ReadAll(v)
+	url := string(Burl)
+	target := database.GetTarget(url)
+	if target == nil {
+		target = database.CreateTarget(url, "0")
+	}
+	body, err := target.GetBody()
+	if err != nil {
+		StatusWrite(g, err.Error())
+		return nil
+	}
+	mainView, err := g.View("MainView")
+	if err != nil {
+		StatusWrite(g, fmt.Sprintf("func:handler.DownloadPage() GetView:: %s", err))
+	}
+	fmt.Fprintf(mainView, "%s", string(body))
 	return nil
 }
 
@@ -81,6 +101,10 @@ func cursorUp(g *gocui.Gui, v *gocui.View) error {
 			}
 		}
 	}
+	return nil
+}
+
+func useRegexp(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
