@@ -3,9 +3,12 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
+	"regexp"
 
 	"github.com/jroimartin/gocui"
 )
+
+var buff *target
 
 // Change select view
 func nextView(g *gocui.Gui, v *gocui.View) error {
@@ -49,48 +52,84 @@ func clearLayout(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
-func StatusWrite(g *gocui.Gui, message string) error {
-	st, _ := g.View("StatusBar")
-	clearLayout(g, st)
-	fmt.Fprintf(st, message)
+func writeLayout(nameView, data string, g *gocui.Gui) error {
+	g.Update(func(g *gocui.Gui) error {
+		view, err := g.View(nameView)
+		if err != nil {
+			StatusWrite(g, fmt.Sprintf("Can't GetView:: %s", err))
+			return nil
+		}
+		clearLayout(g, view)
+		fmt.Fprint(view, data)
+		return nil
+	})
 	return nil
 }
 
-func clearStatusBar(g *gocui.Gui) error {
-	st, _ := g.View("StatusBar")
-	clearLayout(g, st)
+func readLayout(nameView string, g *gocui.Gui) string {
+	view, err := g.View(nameView)
+	if err != nil {
+		StatusWrite(g, fmt.Sprintf("Can't GetView:: %s", err))
+		return ""
+	}
+	Btext, _ := ioutil.ReadAll(view)
+	view.Rewind()
+	text := string(Btext)
+	return text
+}
+
+func StatusWrite(g *gocui.Gui, message string) error {
+	writeLayout("StatusBar", message, g)
 	return nil
 }
 
 func DownloadPage(g *gocui.Gui, v *gocui.View) error {
-	clearStatusBar(g)
-	Burl, _ := ioutil.ReadAll(v)
-	v.Rewind()
-	url := string(Burl)
-	target := database.GetTarget(url)
-	if target == nil {
-		target = database.CreateTarget(url, "0")
+	StatusWrite(g, "")
+	url := readLayout(v.Name(), g)
+	trg := database.GetTarget(url)
+	if trg == nil {
+		trg = new(target)
+		trg.Url = url
+		trg.Cur = "0"
 	}
-	body, err := target.GetBody()
+	body, err := trg.GetData()
 	if err != nil {
 		StatusWrite(g, err.Error())
 		return nil
 	}
-	view, err := g.View("MainView")
-	if err != nil {
-		StatusWrite(g, fmt.Sprintf("func:handler.DownloadPage() GetView:: %s", err))
-	}
-	clearLayout(g, view)
-	fmt.Fprintf(view, "%s", string(body))
-	view, err = g.View("Regular")
-	if err != nil {
-		StatusWrite(g, fmt.Sprintf("func:handler.DownloadPage() GetView:: %s", err))
-	}
+	writeLayout("MainView", string(body), g)
 	rgx := database.GetRegexp(url)
 	if rgx != nil {
-		clearLayout(g, view)
-		fmt.Fprintf(view, "%s", rgx.Exp)
+		writeLayout("Regular", rgx.Exp, g)
+		writeLayout("Mask", rgx.Mask, g)
+	} else {
+		writeLayout("Regular", "", g)
+		writeLayout("Mask", "", g)
 	}
+	buff = trg
+	return nil
+}
+
+func useRegexp(g *gocui.Gui, v *gocui.View) error {
+	body, err := buff.GetData()
+	if err != nil {
+		StatusWrite(g, fmt.Sprint(err))
+		return nil
+	}
+
+	rgx := readLayout("Regular", g)
+	msk := readLayout("Mask", g)
+
+	reg := database.GetRegexp(rgx)
+	if reg == nil {
+		reg = new(regular)
+		reg.Exp = rgx
+		reg.Mask = msk
+	}
+	regex := regexp.MustCompile(reg.Exp)
+	res := regex.ReplaceAllString(string(body), reg.Mask)
+	StatusWrite(g, res)
+	writeLayout("MainView", res, g)
 	return nil
 }
 
@@ -117,11 +156,6 @@ func cursorUp(g *gocui.Gui, v *gocui.View) error {
 			}
 		}
 	}
-	return nil
-}
-
-func useRegexp(g *gocui.Gui, v *gocui.View) error {
-
 	return nil
 }
 

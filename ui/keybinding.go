@@ -40,7 +40,7 @@ func KeyBinding(gui *gocui.Gui) {
 			Description: "Change view",
 		},
 		{
-			ViewName:    []string{"URL", "Regular"},
+			ViewName:    []string{"URL", "Regular", "Mask"},
 			Handler:     clearLayout,
 			Key:         'd',
 			Modifier:    gocui.ModAlt,
