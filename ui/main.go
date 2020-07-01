@@ -118,8 +118,13 @@ func (s *source) Init() {
 }
 
 func (s *source) CreateTarget(Url, Cur string) *target {
+	for _, trg := range s.Data {
+		if trg.Url == Url {
+			return s.GetTarget(Url)
+		}
+	}
 	s.Data = append(s.Data, &target{Url, Cur, nil})
-	return s.Data[len(s.Data)-1]
+	return s.GetTarget(Url)
 }
 
 func (s *source) Lenght() int {
@@ -132,7 +137,13 @@ func (s *source) CreateRegexp(url, exp, mask string) error {
 	if err != nil {
 		return err
 	}
-	s.Regulars[url] = reg
+	re, _ := regexp.Compile(`http.://([^/]+)/`)
+	Url := re.FindStringSubmatch(url)
+	if len(Url) > 1 {
+		s.Regulars[Url[1]] = reg
+	} else {
+		return errors.New("Not correct url address")
+	}
 	return nil
 }
 

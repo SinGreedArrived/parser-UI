@@ -40,6 +40,13 @@ func KeyBinding(gui *gocui.Gui) {
 			Description: "Change view",
 		},
 		{
+			ViewName:    []string{""},
+			Handler:     SaveRegexp,
+			Key:         gocui.KeyCtrlS,
+			Modifier:    gocui.ModNone,
+			Description: "Save target and regexp",
+		},
+		{
 			ViewName:    []string{"URL", "Regular", "Mask"},
 			Handler:     clearLayout,
 			Key:         'd',
@@ -47,7 +54,7 @@ func KeyBinding(gui *gocui.Gui) {
 			Description: "clear layout",
 		},
 		{
-			ViewName:    []string{"Regular"},
+			ViewName:    []string{"Regular", "Mask"},
 			Handler:     useRegexp,
 			Key:         gocui.KeyEnter,
 			Modifier:    gocui.ModNone,

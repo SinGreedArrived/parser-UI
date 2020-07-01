@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"regexp"
+	"strings"
 
 	"github.com/jroimartin/gocui"
 )
@@ -75,7 +76,7 @@ func readLayout(nameView string, g *gocui.Gui) string {
 	Btext, _ := ioutil.ReadAll(view)
 	view.Rewind()
 	text := string(Btext)
-	return text
+	return strings.TrimSpace(text)
 }
 
 func StatusWrite(g *gocui.Gui, message string) error {
@@ -110,7 +111,17 @@ func DownloadPage(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
+func SaveRegexp(g *gocui.Gui, v *gocui.View) error {
+	database.CreateTarget(buff.Url, "0")
+	rgx := readLayout("Regular", g)
+	msk := readLayout("Mask", g)
+	database.CreateRegexp(buff.Url, rgx, msk)
+	StatusWrite(g, "Saved data...")
+	return nil
+}
+
 func useRegexp(g *gocui.Gui, v *gocui.View) error {
+	StatusWrite(g, "Use Regexp on Page: "+buff.Url)
 	body, err := buff.GetData()
 	if err != nil {
 		StatusWrite(g, fmt.Sprint(err))
@@ -120,15 +131,8 @@ func useRegexp(g *gocui.Gui, v *gocui.View) error {
 	rgx := readLayout("Regular", g)
 	msk := readLayout("Mask", g)
 
-	reg := database.GetRegexp(rgx)
-	if reg == nil {
-		reg = new(regular)
-		reg.Exp = rgx
-		reg.Mask = msk
-	}
-	regex := regexp.MustCompile(reg.Exp)
-	res := regex.ReplaceAllString(string(body), reg.Mask)
-	StatusWrite(g, res)
+	regex := regexp.MustCompile(rgx)
+	res := regex.ReplaceAllString(string(body), msk)
 	writeLayout("MainView", res, g)
 	return nil
 }
