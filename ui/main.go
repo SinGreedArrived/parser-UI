@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -22,13 +23,15 @@ var (
 	httpClient = &http.Client{}
 	proxyFlag  = flag.String("proxy", "", "-proxy=\"127.0.0.1:9050\"")
 	filename   = flag.String("file", filepath.Dir(os.Args[0])+"/save.yaml", "-file=test.yaml") // Флаг для выбора файла с целями
+	browser    = flag.String("browser", "firefox", "-browser=firefox")
 	//fileLog  = flag.String("log", "Stderr", "-log=parser.log")     // Флаг для логов
 	threads   = flag.Int("threads", 1, "-threads=6") // Указатель кол-во потоков
 	addRegexp = flag.Bool("addRegexp", false, `-addRegexp "SiteName" "RegexpForName" "RegexpForValue"`)
 	addTarget = flag.Bool("addTarget", false, `-addTarget "Url" "CurrentValue"`)
 	update    = flag.Bool("update", false, "-update") // Обновлять ли отслеживаемуе значения?
-	maximus   = flag.Bool("max", false, "-max")       // Использовать нитей столько, сколько целей в файле json
-	wg        sync.WaitGroup                          // Контроль
+	openLink  = flag.Bool("openLink", false, "-openLink")
+	maximus   = flag.Bool("max", false, "-max") // Использовать нитей столько, сколько целей в файле json
+	wg        sync.WaitGroup                    // Контроль
 )
 
 // -------------------------------------------------------------------------------
@@ -42,7 +45,7 @@ type regular struct {
 func (r *regular) Create(reg, mask string) error {
 	_, err := regexp.Compile(reg)
 	if err != nil {
-		return errors.New(fmt.Sprintf("func:Create regula.Create\n\t%s", err))
+		return errors.New(fmt.Sprintf("func:Create regular.Create\n\t%s", err))
 	}
 	r.Exp = reg
 	r.Mask = mask
@@ -197,6 +200,9 @@ func WorkerHandle(number int, e chan *target) {
 		regex = regexp.MustCompile(`\d+`)
 		value := regex.FindString(res)
 		if elem.Cur != value {
+			if *openLink {
+				OpenLink(*browser, elem.Url)
+			}
 			fmt.Printf("%s:%s\t%s\n", elem.Cur, res, elem.Url)
 		} else {
 			fmt.Printf("%s:%s\n", elem.Cur, res)
@@ -261,6 +267,30 @@ func ProxyInit(addr string) (err error) {
 	httpTransport.Dial = dialer.Dial
 	httpClient.Transport = httpTransport
 	return nil
+}
+
+func OpenLink(Cmd string, linuxArgs ...string) string {
+	cmd := exec.Command(Cmd, linuxArgs...)
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		log.Println(err)
+		return ""
+	}
+	if err := cmd.Start(); err != nil {
+		if err != nil {
+			log.Println(err)
+			return ""
+		}
+	}
+	defer cmd.Wait()
+
+	var str string
+
+	if b, err := ioutil.ReadAll(stdout); err == nil {
+		str += (string(b) + "\n")
+	}
+	output := strings.Replace(str, "\n", "", -1)
+	return output
 }
 
 func main() {
