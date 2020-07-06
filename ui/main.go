@@ -269,28 +269,29 @@ func ProxyInit(addr string) (err error) {
 	return nil
 }
 
-func OpenLink(Cmd string, linuxArgs ...string) string {
+func OpenLink(Cmd string, linuxArgs ...string) {
 	cmd := exec.Command(Cmd, linuxArgs...)
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		log.Println(err)
-		return ""
-	}
 	if err := cmd.Start(); err != nil {
+		if err != nil {
+			log.Println(err)
+		}
+	}
+	/*
+		stdout, err := cmd.StdoutPipe()
 		if err != nil {
 			log.Println(err)
 			return ""
 		}
-	}
-	defer cmd.Wait()
+		defer cmd.Wait()
 
-	var str string
+		var str string
 
-	if b, err := ioutil.ReadAll(stdout); err == nil {
-		str += (string(b) + "\n")
-	}
-	output := strings.Replace(str, "\n", "", -1)
-	return output
+		if b, err := ioutil.ReadAll(stdout); err == nil {
+			str += (string(b) + "\n")
+		}
+		output := strings.Replace(str, "\n", "", -1)
+		return output
+	*/
 }
 
 func main() {
